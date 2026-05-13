@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AMQ Nexus Path Optimizer
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      1.2
 // @description  Calculates best paths, highlights next fight, tracks player location.
 // @author       KNotAnyMore
 // @match        https://animemusicquiz.com/*
