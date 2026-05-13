@@ -81,7 +81,7 @@ function interceptOutgoingMoves() {
 function setupNativeWindow() {
     optimizerWindow = new AMQWindow({
         id: "nexusOptimizerWindow",
-        title: "🧭 Nexus Path Optimizer",
+        title: "Nexus Path Optimizer",
         width: 400,
         height: 380,
         minWidth: 320,
