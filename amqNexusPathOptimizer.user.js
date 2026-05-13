@@ -7,6 +7,8 @@
 // @match        https://animemusicquiz.com/*
 // @grant        none
 // @require      https://github.com/joske2865/AMQ-Scripts/raw/master/common/amqWindows.js
+// @downloadURL  https://github.com/KNotAnyMore/amq-scripts/raw/main/amqNexusPathOptimizer.user.js
+// @updateURL    https://github.com/KNotAnyMore/amq-scripts/raw/main/amqNexusPathOptimizer.user.js
 // ==/UserScript==
 
 /* global Listener, AMQWindow, $, socket */
