@@ -11,16 +11,18 @@
 // @updateURL    https://github.com/KNotAnyMore/amq-scripts/raw/main/amqNexusPathOptimizer.user.js
 // ==/UserScript==
 
+/* global Listener, AMQWindow, $, socket */
+
 // --- CONFIGURATION ---
 const FIGHT_TYPE_ID = 3;
 const BOSS_TYPE_ID = 2;
-const SHOP_TYPE_ID = 5; 
+const SHOP_TYPE_ID = 5;
 
 let globalTileLookup = {};
 let currentPos = { row: 0, col: 2 };
 let optimizerWindow;
 let hasAutoOpened = false;
-let currentPriority = "minFights"; 
+let currentPriority = "minFights";
 
 // 1. Wait for AMQ, AMQWindow, and the Socket to fully load
 let setupInterval = setInterval(() => {
@@ -33,17 +35,21 @@ let setupInterval = setInterval(() => {
 function initOptimizer() {
     setupNativeWindow();
     setupHotkey();
-    setupNexusMonitor(); 
-    interceptOutgoingMoves(); 
-    
+    setupNexusMonitor();
+    interceptOutgoingMoves();
+
     // Handler for Full Map Data
     const handleMapData = (payload) => {
-        const tiles = payload.tiles || (payload.data ? payload.data.tiles : null);
+        // AMQ Listener already unwraps 'data', so we read properties directly
+        const tiles = payload.tiles;
+        const tileOrder = payload.tileOrder;
+
         if (tiles) {
             globalTileLookup = buildTileLookup(tiles);
 
-            if (payload.data && payload.data.tileOrder && payload.data.tileOrder.length > 0) {
-                const lastMove = payload.data.tileOrder[payload.data.tileOrder.length - 1];
+            // Rejoin Logic: perfectly tracks position if you reload mid-run
+            if (tileOrder && tileOrder.length > 0) {
+                const lastMove = tileOrder[tileOrder.length - 1];
                 currentPos = { row: lastMove.row, col: lastMove.col };
             } else {
                 const startTile = tiles.find(t => Object.keys(t.incomingDirections).length === 0);
@@ -71,7 +77,7 @@ function interceptOutgoingMoves() {
         if (payload.type === "nexus" && payload.command === "map select tile") {
             if (payload.data && payload.data.row !== undefined) {
                 currentPos = { row: payload.data.row, col: payload.data.col };
-                setTimeout(updateUI, 100); 
+                setTimeout(updateUI, 100);
             }
         }
         originalSendCommand.apply(this, arguments);
@@ -83,15 +89,15 @@ function setupNativeWindow() {
     optimizerWindow = new AMQWindow({
         id: "nexusOptimizerWindow",
         title: "Nexus Path Optimizer",
-        width: 440,
-        height: 500,
-        minWidth: 380,
-        minHeight: 300,
+        width: 420,
+        height: 400,
+        minWidth: 350,
+        minHeight: 200,
         zIndex: 1050,
         resizable: true,
         draggable: true
     });
-    
+
     optimizerWindow.addPanel({
         id: "nexusOptimizerPanel",
         width: 1.0,
@@ -136,7 +142,7 @@ function setupHotkey() {
         if (inFight || !isNexusMapVisible) return;
 
         if (event.key === "Tab" && !event.altKey && !event.ctrlKey && !event.shiftKey && !event.metaKey) {
-            event.preventDefault(); 
+            event.preventDefault();
             optimizerWindow.isVisible() ? optimizerWindow.close() : optimizerWindow.open();
         }
 
@@ -151,7 +157,7 @@ function setupNexusMonitor() {
     setInterval(() => {
         const isNexusMapVisible = $("#nexusMapIconOverlay").is(":visible");
         const inFight = $("#qpAnswerInput").is(":visible");
-        
+
         if (!isNexusMapVisible || inFight) {
             if (optimizerWindow && optimizerWindow.isVisible()) {
                 optimizerWindow.close();
@@ -198,14 +204,14 @@ function updateUI() {
         if (memo[key]) return memo[key];
 
         const tile = globalTileLookup[row]?.[col];
-        if (!tile) return null; 
+        if (!tile) return null;
 
         const isFight = tile.typeId === FIGHT_TYPE_ID;
         const isShop = tile.typeId === SHOP_TYPE_ID;
-        
+
         const fWeight = isFight ? 1 : 0;
         const sWeight = isShop ? 1 : 0;
-        
+
         let encounterData = [];
         if (isFight) encounterData = [{ name: tile.genre || "standard", floor: row, type: "fight", icon: "⚔️" }];
         if (isShop) encounterData = [{ name: "Shop", floor: row, type: "shop", icon: "🛍️" }];
@@ -238,15 +244,15 @@ function updateUI() {
     }
 
     let activeBranchData = [];
-    let absoluteTarget = null; 
+    let absoluteTarget = null;
 
     branches.forEach(branch => {
         if (!branch.active) return;
         const result = getPathsToBoss(branch.r, branch.c);
         if (!result) return;
-        
+
         activeBranchData.push({ branch, result });
-        
+
         let val;
         if (currentPriority === 'minFights') val = result.minFights.fights;
         if (currentPriority === 'maxFights') val = result.maxFights.fights;
@@ -262,7 +268,7 @@ function updateUI() {
     });
 
     let htmlOutput = `<div style="margin-bottom: 8px; color: #888; padding-bottom: 4px;">Current Location: Floor ${currentPos.row}</div>`;
-    
+
     if (activeBranchData.length === 0) {
         content.html(htmlOutput + `<div style="color: #aaa; text-align: center; margin-top: 20px;">End of the line.</div>`);
         return;
@@ -281,20 +287,38 @@ function updateUI() {
 
     activeBranchData.forEach(data => {
         const { branch, result } = data;
-        
+
         let isOptimal = false;
-        if (currentPriority === 'minFights' && result.minFights.fights === absoluteTarget) isOptimal = true;
-        if (currentPriority === 'maxFights' && result.maxFights.fights === absoluteTarget) isOptimal = true;
-        if (currentPriority === 'maxShops' && result.maxShops.shops === absoluteTarget) isOptimal = true;
-        
-        const containerStyle = isOptimal 
-            ? `background: rgba(0, 40, 0, 0.8); padding: 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid #00ff00; box-shadow: 0 0 12px rgba(0, 255, 0, 0.25); opacity: 1; transition: all 0.3s ease;` 
+        let targetData, targetTitle, targetColor, targetIcon, secondaryInfo;
+
+        if (currentPriority === 'minFights') {
+            targetData = result.minFights;
+            if (targetData.fights === absoluteTarget) isOptimal = true;
+            targetTitle = 'Min Fights';
+            targetColor = '#00ff00';
+            targetIcon = '🟢';
+            secondaryInfo = `(🛍️ Shops: ${targetData.shops})`;
+        } else if (currentPriority === 'maxFights') {
+            targetData = result.maxFights;
+            if (targetData.fights === absoluteTarget) isOptimal = true;
+            targetTitle = 'Max Fights';
+            targetColor = '#ff4444';
+            targetIcon = '🔴';
+            secondaryInfo = `(🛍️ Shops: ${targetData.shops})`;
+        } else if (currentPriority === 'maxShops') {
+            targetData = result.maxShops;
+            if (targetData.shops === absoluteTarget) isOptimal = true;
+            targetTitle = 'Max Shops';
+            targetColor = '#00ccff';
+            targetIcon = '🛍️';
+            secondaryInfo = `(⚔️ Fights: ${targetData.fights})`;
+        }
+
+        const containerStyle = isOptimal
+            ? `background: rgba(0, 40, 0, 0.8); padding: 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid #00ff00; box-shadow: 0 0 12px rgba(0, 255, 0, 0.25); opacity: 1; transition: all 0.3s ease;`
             : `background: rgba(0, 0, 0, 0.3); padding: 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid #444; opacity: 0.45; filter: grayscale(50%); transition: all 0.3s ease;`;
 
-        let optimalNextEnc = null;
-        if (currentPriority === 'minFights') optimalNextEnc = result.minFights.path.length > 0 ? result.minFights.path[0] : null;
-        if (currentPriority === 'maxFights') optimalNextEnc = result.maxFights.path.length > 0 ? result.maxFights.path[0] : null;
-        if (currentPriority === 'maxShops') optimalNextEnc = result.maxShops.path.length > 0 ? result.maxShops.path[0] : null;
+        const optimalNextEnc = targetData.path.length > 0 ? targetData.path[0] : null;
 
         htmlOutput += `
             <div style="${containerStyle}">
@@ -302,30 +326,14 @@ function updateUI() {
                     <strong style="${isOptimal ? 'color:#fff; text-shadow: 0 0 5px rgba(0,255,0,0.5);' : 'color:#aaa;'} font-size: 16px;">${branch.name}</strong>
                     ${isOptimal ? `<span style="background: #00ff00; color: #000; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 10px;">BEST ROUTE</span>` : ''}
                 </div>
-                
+
                 <div style="display: grid; gap: 8px;">
                     <div>
                         <div style="font-size: 13px; margin-bottom: 2px;">
-                            <span style="color: #00ff00; font-weight: bold;">🟢 Min Fights: ${result.minFights.fights}</span>
-                            <span style="color: #888; font-size: 11px; margin-left: 6px;">(🛍️ Shops: ${result.minFights.shops})</span>
+                            <span style="color: ${targetColor}; font-weight: bold;">${targetIcon} ${targetTitle}: ${targetTitle === 'Max Shops' ? targetData.shops : targetData.fights}</span>
+                            <span style="color: #888; font-size: 11px; margin-left: 6px;">${secondaryInfo}</span>
                         </div>
-                        <div style="color: #bbb; font-size: 12px; line-height: 1.4;">${formatPathStr(result.minFights.path)}</div>
-                    </div>
-                    
-                    <div>
-                        <div style="font-size: 13px; margin-bottom: 2px;">
-                            <span style="color: #ff4444; font-weight: bold;">🔴 Max Fights: ${result.maxFights.fights}</span>
-                            <span style="color: #888; font-size: 11px; margin-left: 6px;">(🛍️ Shops: ${result.maxFights.shops})</span>
-                        </div>
-                        <div style="color: #bbb; font-size: 12px; line-height: 1.4;">${formatPathStr(result.maxFights.path)}</div>
-                    </div>
-
-                    <div>
-                        <div style="font-size: 13px; margin-bottom: 2px;">
-                            <span style="color: #00ccff; font-weight: bold;">🛍️ Max Shops: ${result.maxShops.shops}</span>
-                            <span style="color: #888; font-size: 11px; margin-left: 6px;">(⚔️ Fights: ${result.maxShops.fights})</span>
-                        </div>
-                        <div style="color: #bbb; font-size: 12px; line-height: 1.4;">${formatPathStr(result.maxShops.path)}</div>
+                        <div style="color: #bbb; font-size: 12px; line-height: 1.4;">${formatPathStr(targetData.path)}</div>
                     </div>
                 </div>
 
