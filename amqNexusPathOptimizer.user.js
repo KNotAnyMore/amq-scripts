@@ -103,9 +103,9 @@ function setupNativeWindow() {
         <div style="padding: 10px; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.4);">
             <span style="color: #ccc; font-weight: bold; font-size: 13px;">Target Priority:</span>
             <select id="nexus-opt-priority" style="background: #222; color: #00ccff; border: 1px solid #00ccff; border-radius: 4px; padding: 4px 8px; outline: none; cursor: pointer; font-weight: bold;">
-                <option value="minFights">🟢 Lowest Fights (Safe)</option>
-                <option value="maxFights">🔴 Highest Fights (Farm)</option>
-                <option value="maxShops">🛍️ Highest Shops (Items)</option>
+                <option value="minFights">🟢 Lowest Fights</option>
+                <option value="maxFights">🔴 Highest Fights</option>
+                <option value="maxShops">🛍️ Highest Shops</option>
             </select>
         </div>
         <div id="nexus-opt-content" style="padding: 10px; font-size: 14px;">
