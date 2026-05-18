@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AMQ Nexus Path Optimizer
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.3
 // @description  Calculates best paths, highlights next fight, tracks player location.
 // @author       KNotAnyMore
 // @match        https://animemusicquiz.com/*
@@ -16,13 +16,13 @@
 // --- CONFIGURATION ---
 const FIGHT_TYPE_ID = 3;
 const BOSS_TYPE_ID = 2;
-const SHOP_TYPE_ID = 5;
+const SHOP_TYPE_ID = 5; 
 
 let globalTileLookup = {};
 let currentPos = { row: 0, col: 2 };
 let optimizerWindow;
 let hasAutoOpened = false;
-let currentPriority = "minFights";
+let currentPriority = "minFights"; 
 
 // 1. Wait for AMQ, AMQWindow, and the Socket to fully load
 let setupInterval = setInterval(() => {
@@ -35,10 +35,10 @@ let setupInterval = setInterval(() => {
 function initOptimizer() {
     setupNativeWindow();
     setupHotkey();
-    setupNexusMonitor();
-    interceptOutgoingMoves();
-
-    // Handler for Full Map Data
+    setupNexusMonitor(); 
+    interceptOutgoingMoves(); 
+    
+    // Handler for Full Map Data 
     const handleMapData = (payload) => {
         // AMQ Listener already unwraps 'data', so we read properties directly
         const tiles = payload.tiles;
@@ -47,7 +47,7 @@ function initOptimizer() {
         if (tiles) {
             globalTileLookup = buildTileLookup(tiles);
 
-            // Rejoin Logic: perfectly tracks position if you reload mid-run
+            // Rejoin Logic & Next Floor Logic
             if (tileOrder && tileOrder.length > 0) {
                 const lastMove = tileOrder[tileOrder.length - 1];
                 currentPos = { row: lastMove.row, col: lastMove.col };
@@ -66,8 +66,10 @@ function initOptimizer() {
         }
     };
 
+    // Listen for all 3 ways a map can be loaded
     new Listener("nexus map init", handleMapData).bindListener();
     new Listener("nexus map state", handleMapData).bindListener();
+    new Listener("nexus map next floor", handleMapData).bindListener();
 }
 
 // 2. Intercept Outgoing Tile Clicks
@@ -77,7 +79,7 @@ function interceptOutgoingMoves() {
         if (payload.type === "nexus" && payload.command === "map select tile") {
             if (payload.data && payload.data.row !== undefined) {
                 currentPos = { row: payload.data.row, col: payload.data.col };
-                setTimeout(updateUI, 100);
+                setTimeout(updateUI, 100); 
             }
         }
         originalSendCommand.apply(this, arguments);
@@ -97,7 +99,7 @@ function setupNativeWindow() {
         resizable: true,
         draggable: true
     });
-
+    
     optimizerWindow.addPanel({
         id: "nexusOptimizerPanel",
         width: 1.0,
@@ -109,9 +111,9 @@ function setupNativeWindow() {
         <div style="padding: 10px; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.4);">
             <span style="color: #ccc; font-weight: bold; font-size: 13px;">Target Priority:</span>
             <select id="nexus-opt-priority" style="background: #222; color: #00ccff; border: 1px solid #00ccff; border-radius: 4px; padding: 4px 8px; outline: none; cursor: pointer; font-weight: bold;">
-                <option value="minFights">🟢 Lowest Fights</option>
-                <option value="maxFights">🔴 Highest Fights</option>
-                <option value="maxShops">🛍️ Highest Shops</option>
+                <option value="minFights">🟢 Lowest Fights (Safe)</option>
+                <option value="maxFights">🔴 Highest Fights (Farm)</option>
+                <option value="maxShops">🛍️ Highest Shops (Items)</option>
             </select>
         </div>
         <div id="nexus-opt-content" style="padding: 10px; font-size: 14px;">
@@ -142,7 +144,7 @@ function setupHotkey() {
         if (inFight || !isNexusMapVisible) return;
 
         if (event.key === "Tab" && !event.altKey && !event.ctrlKey && !event.shiftKey && !event.metaKey) {
-            event.preventDefault();
+            event.preventDefault(); 
             optimizerWindow.isVisible() ? optimizerWindow.close() : optimizerWindow.open();
         }
 
@@ -157,7 +159,7 @@ function setupNexusMonitor() {
     setInterval(() => {
         const isNexusMapVisible = $("#nexusMapIconOverlay").is(":visible");
         const inFight = $("#qpAnswerInput").is(":visible");
-
+        
         if (!isNexusMapVisible || inFight) {
             if (optimizerWindow && optimizerWindow.isVisible()) {
                 optimizerWindow.close();
@@ -204,14 +206,14 @@ function updateUI() {
         if (memo[key]) return memo[key];
 
         const tile = globalTileLookup[row]?.[col];
-        if (!tile) return null;
+        if (!tile) return null; 
 
         const isFight = tile.typeId === FIGHT_TYPE_ID;
         const isShop = tile.typeId === SHOP_TYPE_ID;
-
+        
         const fWeight = isFight ? 1 : 0;
         const sWeight = isShop ? 1 : 0;
-
+        
         let encounterData = [];
         if (isFight) encounterData = [{ name: tile.genre || "standard", floor: row, type: "fight", icon: "⚔️" }];
         if (isShop) encounterData = [{ name: "Shop", floor: row, type: "shop", icon: "🛍️" }];
@@ -244,15 +246,15 @@ function updateUI() {
     }
 
     let activeBranchData = [];
-    let absoluteTarget = null;
+    let absoluteTarget = null; 
 
     branches.forEach(branch => {
         if (!branch.active) return;
         const result = getPathsToBoss(branch.r, branch.c);
         if (!result) return;
-
+        
         activeBranchData.push({ branch, result });
-
+        
         let val;
         if (currentPriority === 'minFights') val = result.minFights.fights;
         if (currentPriority === 'maxFights') val = result.maxFights.fights;
@@ -268,7 +270,7 @@ function updateUI() {
     });
 
     let htmlOutput = `<div style="margin-bottom: 8px; color: #888; padding-bottom: 4px;">Current Location: Floor ${currentPos.row}</div>`;
-
+    
     if (activeBranchData.length === 0) {
         content.html(htmlOutput + `<div style="color: #aaa; text-align: center; margin-top: 20px;">End of the line.</div>`);
         return;
@@ -287,7 +289,7 @@ function updateUI() {
 
     activeBranchData.forEach(data => {
         const { branch, result } = data;
-
+        
         let isOptimal = false;
         let targetData, targetTitle, targetColor, targetIcon, secondaryInfo;
 
@@ -313,9 +315,9 @@ function updateUI() {
             targetIcon = '🛍️';
             secondaryInfo = `(⚔️ Fights: ${targetData.fights})`;
         }
-
-        const containerStyle = isOptimal
-            ? `background: rgba(0, 40, 0, 0.8); padding: 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid #00ff00; box-shadow: 0 0 12px rgba(0, 255, 0, 0.25); opacity: 1; transition: all 0.3s ease;`
+        
+        const containerStyle = isOptimal 
+            ? `background: rgba(0, 40, 0, 0.8); padding: 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid #00ff00; box-shadow: 0 0 12px rgba(0, 255, 0, 0.25); opacity: 1; transition: all 0.3s ease;` 
             : `background: rgba(0, 0, 0, 0.3); padding: 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid #444; opacity: 0.45; filter: grayscale(50%); transition: all 0.3s ease;`;
 
         const optimalNextEnc = targetData.path.length > 0 ? targetData.path[0] : null;
@@ -326,7 +328,7 @@ function updateUI() {
                     <strong style="${isOptimal ? 'color:#fff; text-shadow: 0 0 5px rgba(0,255,0,0.5);' : 'color:#aaa;'} font-size: 16px;">${branch.name}</strong>
                     ${isOptimal ? `<span style="background: #00ff00; color: #000; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 10px;">BEST ROUTE</span>` : ''}
                 </div>
-
+                
                 <div style="display: grid; gap: 8px;">
                     <div>
                         <div style="font-size: 13px; margin-bottom: 2px;">
